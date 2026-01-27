@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Code Runner</title>
+  <style>
+    body {
+      font-family: monospace;
+      background: #0f0f0f;
+      color: #eee;
+      padding: 20px;
+    }
+    textarea, select, button {
+      width: 100%;
+      margin-top: 10px;
+      background: #1e1e1e;
+      color: #eee;
+      border: 1px solid #333;
+      padding: 8px;
+    }
+    button {
+      cursor: pointer;
+    }
+    pre {
+      background: #111;
+      padding: 10px;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Попробуй меня положить :)</h1>
+
+<label>Runtime</label>
+<select id="runtime">
+  <option value="python:3.11">Python 3.11</option>
+  <option value="cpp:gcc-12">C++17</option>
+</select>
+
+<label>Code</label>
+<textarea id="code" rows="10">print(10)</textarea>
+
+<label>Stdin</label>
+<textarea id="stdin" rows="3"></textarea>
+
+<button onclick="runCode()">▶ Run</button>
+
+<h3>Status</h3>
+<pre id="status"></pre>
+
+<h3>Stdout</h3>
+<pre id="stdout"></pre>
+
+<h3>Stderr</h3>
+<pre id="stderr"></pre>
+
+<script>
+const codeTextarea = document.getElementById("code");
+codeTextarea.addEventListener("keydown", (e) => {
+  if (e.key === "Tab") {
+    e.preventDefault();
+    const start = codeTextarea.selectionStart;
+    const end = codeTextarea.selectionEnd;
+    codeTextarea.value = codeTextarea.value.substring(0, start) + "    " + codeTextarea.value.substring(end);
+    codeTextarea.selectionStart = codeTextarea.selectionEnd = start + 4;
+  }
+});
+
+async function runCode() {
+  document.getElementById("status").textContent = "queued...";
+  document.getElementById("stdout").textContent = "";
+  document.getElementById("stderr").textContent = "";
+
+  const runtime = document.getElementById("runtime").value;
+  const code = document.getElementById("code").value;
+  const stdin = document.getElementById("stdin").value;
+
+  try {
+    const res = await fetch("/run", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ runtime, code, stdin })
+    });
+
+    if (!res.ok) {
+      const error = await res.json();
+      document.getElementById("status").textContent = "error";
+      document.getElementById("stderr").textContent = error.detail || "Request failed";
+      return;
+    }
+
+    const data = await res.json();
+    pollResult(data.job_id);
+  } catch (error) {
+    document.getElementById("status").textContent = "error";
+    document.getElementById("stderr").textContent = "Network error: " + error.message;
+  }
+}
+
+async function pollResult(jobId) {
+  const interval = setInterval(async () => {
+    try {
+      const res = await fetch(`/jobs/${jobId}`);
+      
+      if (!res.ok) {
+        clearInterval(interval);
+        document.getElementById("status").textContent = "error";
+        document.getElementById("stderr").textContent = "Failed to fetch job status";
+        return;
+      }
+
+      const job = await res.json();
+
+      if (!job.result) return;
+
+      document.getElementById("status").textContent = job.result.status;
+      document.getElementById("stdout").textContent = job.result.stdout;
+      document.getElementById("stderr").textContent = job.result.stderr;
+
+      if (job.result.status !== "running") {
+        clearInterval(interval);
+      }
+    } catch (error) {
+      clearInterval(interval);
+      document.getElementById("status").textContent = "error";
+      document.getElementById("stderr").textContent = "Poll error: " + error.message;
+    }
+  }, 500);
+}
+</script>
+
+</body>
+</html>

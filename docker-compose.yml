@@ -1,0 +1,26 @@
+version: "3.9"
+
+services:
+  redis:
+    image: redis:7
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    depends_on:
+      - redis
+    environment:
+      - SANDBOX_WORKDIR=/tmp/code_runner_sandbox
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp/code_runner_sandbox:/tmp/code_runner_sandbox
