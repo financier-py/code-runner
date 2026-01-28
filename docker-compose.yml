@@ -4,6 +4,18 @@ services:
   redis:
     image: redis:7
 
+  # --- Новый сервис: Docker-in-Docker ---
+  dind:
+    image: docker:24-dind
+    privileged: true # Нужно для запуска вложенных контейнеров
+    environment:
+      DOCKER_TLS_CERTDIR: "" # Отключаем TLS для простоты (внутри сети безопасно)
+    volumes:
+      # Общее хранилище для кода, чтобы dind видел файлы, созданные воркером
+      - sandbox_data:/tmp/code_runner_sandbox
+    ports:
+      - "2375" # Открываем порт для worker-а (внутри сети docker)
+
   api:
     build:
       context: .
@@ -19,8 +31,15 @@ services:
       dockerfile: Dockerfile.worker
     depends_on:
       - redis
+      - dind
     environment:
+      # Говорим CLI утилите docker, куда подключаться
+      - DOCKER_HOST=tcp://dind:2375
+      # Путь внутри контейнера, куда класть код (должен совпадать с volume dind)
       - SANDBOX_WORKDIR=/tmp/code_runner_sandbox
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - /tmp/code_runner_sandbox:/tmp/code_runner_sandbox
+      # Монтируем тот же volume в ту же папку
+      - sandbox_data:/tmp/code_runner_sandbox
+
+volumes:
+  sandbox_data: # Объявляем именованный том
