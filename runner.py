@@ -1,5 +1,6 @@
 import subprocess
 import tempfile
+import uuid
 import os
 from pathlib import Path
 
@@ -17,8 +18,11 @@ def _docker_run(
         stdin: str = "",
         timeout: int = 5
 ) -> subprocess.CompletedProcess:
+    container_name = f"sandbox-{uuid.uuid4()}"
+
     cmd = [
         "docker", "run", "--rm",
+        "--name", container_name, 
         "--memory=64m", "--cpus=1",
         "--pids-limit=32", "--network=none",
         "--read-only", "--cap-drop=ALL",
@@ -28,14 +32,21 @@ def _docker_run(
         image,
         *command
     ]
-
-    return subprocess.run(
-        cmd,
-        input=stdin,
-        text=True,
-        capture_output=True, 
-        timeout=timeout
-    )
+    try:
+        return subprocess.run(
+            cmd,
+            input=stdin,
+            text=True,
+            capture_output=True, 
+            timeout=timeout
+        )
+    except subprocess.TimeoutExpired:
+        subprocess.run(
+            ["docker", "kill", container_name],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+        raise
 
 def run_job(runtime_name: str, code: str, stdin: str) -> RunResult:
     runtime: Runtime | None = RUNTIMES.get(runtime_name)
