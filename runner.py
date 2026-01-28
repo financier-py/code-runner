@@ -22,6 +22,7 @@ def _docker_run(
 
     cmd = [
         "docker", "run", "--rm",
+        "-i",
         "--name", container_name, 
         "--memory=64m", "--cpus=1",
         "--pids-limit=32", "--network=none",
