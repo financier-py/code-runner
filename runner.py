@@ -16,7 +16,7 @@ def _docker_run(
         command: list[str],
         workdir: Path,
         stdin: str = "",
-        timeout: int = 5
+        timeout: int = 30
 ) -> subprocess.CompletedProcess:
     container_name = f"sandbox-{uuid.uuid4()}"
 
@@ -24,7 +24,7 @@ def _docker_run(
         "docker", "run", "--rm",
         "-i",
         "--name", container_name, 
-        "--memory=64m", "--cpus=1",
+        "--memory=256m", "--cpus=1",
         "--pids-limit=32", "--network=none",
         "--read-only", "--cap-drop=ALL",
         "--tmpfs", "/tmp",

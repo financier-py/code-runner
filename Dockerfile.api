@@ -5,6 +5,9 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app.py models.py runtimes.py config.py index.html ./
+COPY app.py database.py db_models.py crud.py models.py runtimes.py config.py index.html ./
+
+# Создаем папку для базы данных, чтобы у приложения были права доступа
+RUN mkdir -p data && chmod 777 data
 
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]

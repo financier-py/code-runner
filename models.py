@@ -26,3 +26,7 @@ class Job(BaseModel):
     code: str
     stdin: str
     result: RunResult | None = None
+    
+class ShareRequest(BaseModel):
+    runtime: str
+    code: str = Field(..., max_length=1000)
