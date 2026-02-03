@@ -1,20 +1,37 @@
-version: "3.9"
-
 services:
   redis:
     image: redis:7
+    restart: unless-stopped
 
-  # --- Новый сервис: Docker-in-Docker ---
   dind:
     image: docker:24-dind
-    privileged: true # Нужно для запуска вложенных контейнеров
+    privileged: true
+    restart: unless-stopped
     environment:
-      DOCKER_TLS_CERTDIR: "" # Отключаем TLS для простоты (внутри сети безопасно)
+      DOCKER_TLS_CERTDIR: ""
     volumes:
-      # Общее хранилище для кода, чтобы dind видел файлы, созданные воркером
-      - sandbox_data:/tmp/code_runner_sandbox
-    ports:
-      - "2375" # Открываем порт для worker-а (внутри сети docker)
+      - sandbox_data:/opt/code_runner_sandbox
+
+  # 👇 Прогрев образов (выполняется и завершается)
+  prewarm:
+    image: docker:24-cli
+    depends_on:
+      - dind
+    environment:
+      - DOCKER_HOST=tcp://dind:2375
+    entrypoint: >
+      sh -c "
+        echo 'Waiting for Docker daemon...' ;
+        until docker info >/dev/null 2>&1; do sleep 1; done ;
+
+        echo 'Pre-pulling runtime images...' ;
+        docker pull python:3.11-slim ;
+        docker pull gcc:12 ;
+        docker pull node:18-slim ;
+
+        echo 'Prewarm complete.'
+      "
+    restart: "no"
 
   api:
     build:
@@ -22,24 +39,27 @@ services:
       dockerfile: Dockerfile.api
     ports:
       - "8000:8000"
+    restart: unless-stopped
     depends_on:
       - redis
+    environment:
+      - REDIS_HOST=redis
 
   worker:
     build:
       context: .
       dockerfile: Dockerfile.worker
+    restart: unless-stopped
     depends_on:
       - redis
       - dind
+      - prewarm   # ⬅️ ждём, пока образы скачаются
     environment:
-      # Говорим CLI утилите docker, куда подключаться
+      - REDIS_HOST=redis
       - DOCKER_HOST=tcp://dind:2375
-      # Путь внутри контейнера, куда класть код (должен совпадать с volume dind)
-      - SANDBOX_WORKDIR=/tmp/code_runner_sandbox
+      - SANDBOX_WORKDIR=/opt/code_runner_sandbox
     volumes:
-      # Монтируем тот же volume в ту же папку
-      - sandbox_data:/tmp/code_runner_sandbox
+      - sandbox_data:/opt/code_runner_sandbox
 
 volumes:
-  sandbox_data: # Объявляем именованный том
+  sandbox_data:
